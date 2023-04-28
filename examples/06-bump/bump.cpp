@@ -283,8 +283,13 @@ public:
 						bgfx::setVertexBuffer(0, m_vbh);
 						bgfx::setIndexBuffer(m_ibh);
 
+						//Simply cycle through possible samplers
+						static int flag = 0;
+						flag += 1;
+						flag %= 120;
+
 						// Bind textures.
-						bgfx::setTexture(0, s_texColor,  m_textureColor);
+						bgfx::setTexture(0, s_texColor,  m_textureColor, flag);
 						bgfx::setTexture(1, s_texNormal, m_textureNormal);
 
 						// Set render states.
