@@ -283,9 +283,25 @@ public:
 						bgfx::setVertexBuffer(0, m_vbh);
 						bgfx::setIndexBuffer(m_ibh);
 
+
+						int sampler_state_count = 15;
+
+						static int flag0 = 0;
+						static int flag1 = 0;
+						static int total_combined = 0;
+
+						++flag0;
+						if (flag0 > sampler_state_count)
+						{
+							++flag1;
+							flag1 %= sampler_state_count;
+							flag0 = 0;
+						}
+						++total_combined;
+						BX_TRACE("%d, %d = %d", flag0, flag1, total_combined);
 						// Bind textures.
-						bgfx::setTexture(0, s_texColor,  m_textureColor);
-						bgfx::setTexture(1, s_texNormal, m_textureNormal);
+						bgfx::setTexture(0, s_texColor,  m_textureColor, flag0);
+						bgfx::setTexture(1, s_texNormal, m_textureNormal, flag1);
 
 						// Set render states.
 						bgfx::setState(0
