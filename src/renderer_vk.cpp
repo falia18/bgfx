@@ -289,7 +289,7 @@ VK_IMPORT_DEVICE
 		{
 			VK_LAYER_KHRONOS_validation,
 			VK_LAYER_LUNARG_standard_validation,
-
+			VK_LAYER_RENDERDOC_Capture,
 			Count
 		};
 
@@ -305,6 +305,7 @@ VK_IMPORT_DEVICE
 	{
 		{ "VK_LAYER_KHRONOS_validation",         1, { false, false }, { false, false } },
 		{ "VK_LAYER_LUNARG_standard_validation", 1, { false, false }, { false, false } },
+		{ "VK_LAYER_RENDERDOC_Capture",          0, { false, false }, { false, false } },
 		{ "",                                    0, { false, false }, { false, false } },
 	};
 	BX_STATIC_ASSERT(Layer::Count == BX_COUNTOF(s_layer)-1);
@@ -1197,6 +1198,8 @@ VK_IMPORT
 				s_layer[Layer::VK_LAYER_LUNARG_standard_validation].m_instance.m_initialize = _init.debug;
 				s_layer[Layer::VK_LAYER_KHRONOS_validation        ].m_device.m_initialize   = _init.debug;
 				s_layer[Layer::VK_LAYER_KHRONOS_validation        ].m_instance.m_initialize = _init.debug;
+				s_layer[Layer::VK_LAYER_RENDERDOC_Capture         ].m_device.m_initialize   = _init.debug || _init.profile;
+				s_layer[Layer::VK_LAYER_RENDERDOC_Capture         ].m_instance.m_initialize = _init.debug || _init.profile;
 
 				s_extension[Extension::EXT_debug_report].m_initialize = _init.debug;
 
@@ -1265,6 +1268,8 @@ VK_IMPORT
 				}
 
 				uint32_t vulkanApiVersionSelector;
+
+				vulkanApiVersionSelector = VK_API_VERSION_1_0;
 
 				if (NULL != vkEnumerateInstanceVersion)
 				{
