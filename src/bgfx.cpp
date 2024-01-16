@@ -3844,6 +3844,23 @@ namespace bgfx
 			) );
 	}
 
+	void Encoder::setInstanceDataBuffer(VertexBufferHandle _handle, uint32_t _startVertex, uint32_t _num, uint16_t _stride)
+	{
+		BGFX_CHECK_HANDLE("setInstanceDataBuffer", s_ctx->m_vertexBufferHandle, _handle);
+		BGFX_ENCODER(setInstanceDataBuffer(_handle, _startVertex * _stride, _num, _stride));
+	}
+
+	void Encoder::setInstanceDataBuffer(DynamicVertexBufferHandle _handle, uint32_t _startVertex, uint32_t _num, uint16_t _stride)
+	{
+		BGFX_CHECK_HANDLE("setInstanceDataBuffer", s_ctx->m_dynamicVertexBufferHandle, _handle);
+		const DynamicVertexBuffer& dvb = s_ctx->m_dynamicVertexBuffers[_handle.idx];
+		BGFX_ENCODER(setInstanceDataBuffer(dvb.m_handle
+			, dvb.m_startVertex + _startVertex
+			, _num
+			, _stride
+		));
+	}
+
 	void Encoder::setInstanceCount(uint32_t _numInstances)
 	{
 		BGFX_CHECK_CAPS(BGFX_CAPS_VERTEX_ID, "Auto generated instances are not supported!");
@@ -5468,6 +5485,18 @@ namespace bgfx
 	{
 		BGFX_CHECK_ENCODER0();
 		s_ctx->m_encoder0->setInstanceDataBuffer(_handle, _startVertex, _num);
+	}
+
+	void setInstanceDataBuffer(VertexBufferHandle _handle, uint32_t _startVertex, uint32_t _num, uint16_t _stride)
+	{
+		BGFX_CHECK_ENCODER0();
+		s_ctx->m_encoder0->setInstanceDataBuffer(_handle, _startVertex, _num, _stride);
+	}
+
+	void setInstanceDataBuffer(DynamicVertexBufferHandle _handle, uint32_t _startVertex, uint32_t _num, uint16_t _stride)
+	{
+		BGFX_CHECK_ENCODER0();
+		s_ctx->m_encoder0->setInstanceDataBuffer(_handle, _startVertex, _num, _stride);
 	}
 
 	void setInstanceCount(uint32_t _numInstances)

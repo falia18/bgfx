@@ -1421,6 +1421,36 @@ namespace bgfx
 			, uint32_t _num
 			);
 
+		/// Set instance data buffer for draw primitive.
+		///
+		/// @param[in] _handle Vertex buffer.
+		/// @param[in] _start First instance data.
+		/// @param[in] _num Number of data instances.
+		/// @param[in] _stride Stride per instance.
+		///
+		void setInstanceDataBuffer(
+			VertexBufferHandle _handle
+			, uint32_t _start
+			, uint32_t _num
+			, uint16_t _stride
+		);
+
+		/// Set instance data buffer for draw primitive.
+		///
+		/// @param[in] _handle Vertex buffer.
+		/// @param[in] _start First instance data.
+		/// @param[in] _num Number of data instances.
+		/// @param[in] _stride Stride per instance.
+		///
+		/// @attention C99's equivalent binding is `TODO`.
+		///
+		void setInstanceDataBuffer(
+			DynamicVertexBufferHandle _handle
+			, uint32_t _start
+			, uint32_t _num
+			, uint16_t _stride
+		);
+
 		/// Set number of instances for auto generated instances use in conjunction
 		/// with gl_InstanceID.
 		///
@@ -3899,6 +3929,36 @@ namespace bgfx
 		, uint32_t _start
 		, uint32_t _num
 		);
+
+	/// Set instance data buffer for draw primitive.
+	///
+	/// @param[in] _handle Vertex buffer.
+	/// @param[in] _start First instance data.
+	/// @param[in] _num Number of data instances.
+	/// @param[in] _stride Stride per instance.
+	///
+	void setInstanceDataBuffer(
+		VertexBufferHandle _handle
+		, uint32_t _start
+		, uint32_t _num
+		, uint16_t _stride
+	);
+
+	/// Set instance data buffer for draw primitive.
+	///
+	/// @param[in] _handle Vertex buffer.
+	/// @param[in] _start First instance data.
+	/// @param[in] _num Number of data instances.
+	/// @param[in] _stride Stride per instance.
+	///
+	/// @attention C99's equivalent binding is `TODO`.
+	///
+	void setInstanceDataBuffer(
+		DynamicVertexBufferHandle _handle
+		, uint32_t _start
+		, uint32_t _num
+		, uint16_t _stride
+	);
 
 	/// Set number of instances for auto generated instances use in conjunction
 	/// with gl_InstanceID.
