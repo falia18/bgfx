@@ -4471,6 +4471,8 @@ namespace bgfx { namespace d3d12
 
 				indirect.update(_commandList, 0, num*s_indirectCommandSize[_type], m_cmds[_type]);
 
+				bx::memSet(&m_current, 0, sizeof(m_current));
+
 				_commandList->ExecuteIndirect(m_commandSignature[_type]
 					, num
 					, indirect.m_ptr
