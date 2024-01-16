@@ -415,7 +415,7 @@ namespace bgfx
 
 	inline bool isValid(const VertexLayout& _layout)
 	{
-		return 0 != _layout.m_stride;
+		return true;
 	}
 
 	struct Condition
@@ -2649,7 +2649,7 @@ namespace bgfx
 				stream.m_handle        = _dvb.m_handle;
 				stream.m_layoutHandle  = isValid(_layoutHandle) ? _layoutHandle : _dvb.m_layoutHandle;
 				m_numVertices[_stream] =
-					bx::min(bx::uint32_imax(0, (_dvb.m_size - _offset) / _dvb.m_stride), _numVertices)
+					(_dvb.m_stride == 0) ? _numVertices : bx::min(bx::uint32_imax(0, (_dvb.m_size - _offset) / _dvb.m_stride), _numVertices)
 					;
 			}
 		}
@@ -2670,7 +2670,7 @@ namespace bgfx
 				stream.m_offset        = _tvb->offset + _offset;
 				stream.m_handle        = _tvb->handle;
 				stream.m_layoutHandle  = isValid(_layoutHandle) ? _layoutHandle : _tvb->layoutHandle;
-				m_numVertices[_stream] = bx::min(bx::uint32_imax(0, (_tvb->size - _offset) / _tvb->stride), _numVertices);
+				m_numVertices[_stream] = (_tvb->stride == 0) ? _numVertices : bx::min(bx::uint32_imax(0, (_tvb->size - _offset) / _tvb->stride), _numVertices);
 			}
 		}
 
