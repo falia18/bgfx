@@ -2178,7 +2178,7 @@ namespace bgfx { namespace d3d11
 			setShaderUniform(flags, predefined.m_loc, proj, 4);
 
 			commitShaderConstants();
-			m_textures[_blitter.m_texture.idx].commit(0, BGFX_SAMPLER_INTERNAL_DEFAULT, NULL);
+			m_textures[_blitter.m_texture.idx].commit(0, 0, BGFX_SAMPLER_INTERNAL_DEFAULT, NULL);
 			commitTextureStage();
 		}
 
@@ -3002,7 +3002,7 @@ namespace bgfx { namespace d3d11
 			m_deviceCtx->RSSetState(rs);
 		}
 
-		ID3D11SamplerState* getSamplerState(uint32_t _flags, const float _rgba[4])
+		ID3D11SamplerState* getSamplerState(uint32_t _flags, uint64_t _controlFlags, const float _rgba[4])
 		{
 			const uint32_t index = (_flags & BGFX_SAMPLER_BORDER_COLOR_MASK) >> BGFX_SAMPLER_BORDER_COLOR_SHIFT;
 			_flags &= BGFX_SAMPLER_BITS_MASK;
@@ -3021,6 +3021,7 @@ namespace bgfx { namespace d3d11
 				bx::HashMurmur2A murmur;
 				murmur.begin();
 				murmur.add(_flags);
+				murmur.add(_controlFlags);
 				murmur.add(-1);
 				hash = murmur.end();
 				_rgba = s_zero.m_zerof;
@@ -3032,6 +3033,7 @@ namespace bgfx { namespace d3d11
 				bx::HashMurmur2A murmur;
 				murmur.begin();
 				murmur.add(_flags);
+				murmur.add(_controlFlags);
 				murmur.add(index);
 				hash = murmur.end();
 				_rgba = NULL == _rgba ? s_zero.m_zerof : _rgba;
@@ -3057,6 +3059,8 @@ namespace bgfx { namespace d3d11
 				const uint8_t  magFilter = s_textureFilter[1][(_flags&BGFX_SAMPLER_MAG_MASK)>>BGFX_SAMPLER_MAG_SHIFT];
 				const uint8_t  mipFilter = s_textureFilter[2][(_flags&BGFX_SAMPLER_MIP_MASK)>>BGFX_SAMPLER_MIP_SHIFT];
 				const uint8_t  filter    = 0 == cmpFunc ? 0 : D3D11_COMPARISON_FILTERING_BIT;
+				const bool enableControl = (((_controlFlags >> BGFX_TEXCTRL_ENABLE_SHIFT) & BGFX_TEXCTRL_ENABLE_MASK) > 0);
+
 
 				D3D11_SAMPLER_DESC sd;
 				sd.Filter         = (D3D11_FILTER)(filter|minFilter|magFilter|mipFilter);
@@ -3064,14 +3068,29 @@ namespace bgfx { namespace d3d11
 				sd.AddressV       = s_textureAddress[(_flags&BGFX_SAMPLER_V_MASK)>>BGFX_SAMPLER_V_SHIFT];
 				sd.AddressW       = s_textureAddress[(_flags&BGFX_SAMPLER_W_MASK)>>BGFX_SAMPLER_W_SHIFT];
 				sd.MipLODBias     = float(BGFX_CONFIG_MIP_LOD_BIAS);
-				sd.MaxAnisotropy  = m_maxAnisotropy;
 				sd.ComparisonFunc = 0 == cmpFunc ? D3D11_COMPARISON_NEVER : s_cmpFunc[cmpFunc];
 				sd.BorderColor[0] = _rgba[0];
 				sd.BorderColor[1] = _rgba[1];
 				sd.BorderColor[2] = _rgba[2];
 				sd.BorderColor[3] = _rgba[3];
-				sd.MinLOD = 0;
-				sd.MaxLOD = D3D11_FLOAT32_MAX;
+
+				if (enableControl)
+				{
+					int bias = ((_controlFlags >> BGFX_TEXFILTER_MIPBIAS_SHIFT) & BGFX_TEXFILTER_MIPBIAS_MASK);
+					sd.MipLODBias = (bias & 0x0fff) / 256.0f - (bias & 0x1000 ? 16.f : 0.f); // TODO: understand and simplify this, this looks fishy (maybe need to separate in different flag params to avoid this black sorcery)
+					int maxAniso = ((_controlFlags >> BGFX_TEXCTRL_MAXANISO_SHIFT) & BGFX_TEXCTRL_MAXANISO_MASK);
+					sd.MaxAnisotropy = maxAniso == 0 ? 1 : maxAniso == 1 ? 2 : maxAniso == 2 ? 4 : maxAniso == 3 ? 6 :
+						maxAniso == 4 ? 8 : maxAniso == 5 ? 10 : maxAniso == 6 ? 12 : maxAniso == 7 ? 16 : 0;
+					sd.MinLOD = ((_controlFlags >> BGFX_TEXCTRL_MINLOD_SHIFT) & BGFX_TEXCTRL_MINLOD_MASK) / 256.0f;
+					sd.MaxLOD = ((_controlFlags >> BGFX_TEXCTRL_MAXLOD_SHIFT) & BGFX_TEXCTRL_MAXLOD_MASK) / 256.0f;
+				}
+				else
+				{
+					sd.MaxAnisotropy = m_maxAnisotropy;
+					sd.MinLOD = 0;
+					sd.MaxLOD = D3D11_FLOAT32_MAX;
+					sd.MipLODBias = float(BGFX_CONFIG_MIP_LOD_BIAS); //TODO: rename "default"?
+				}
 
 				DX_CHECK(m_device->CreateSamplerState(&sd, &sampler));
 				DX_CHECK_REFCOUNT(sampler, 1);
@@ -4827,7 +4846,7 @@ namespace bgfx { namespace d3d11
 		}
 	}
 
-	void TextureD3D11::commit(uint8_t _stage, uint32_t _flags, const float _palette[][4])
+	void TextureD3D11::commit(uint8_t _stage, uint32_t _flags, uint64_t _controlFlags, const float _palette[][4])
 	{
 		TextureStage& ts = s_renderD3D11->m_textureStage;
 
@@ -4850,7 +4869,7 @@ namespace bgfx { namespace d3d11
 			: uint32_t(m_flags)
 			;
 		uint32_t index = (flags & BGFX_SAMPLER_BORDER_COLOR_MASK) >> BGFX_SAMPLER_BORDER_COLOR_SHIFT;
-		ts.m_sampler[_stage] = s_renderD3D11->getSamplerState(flags, _palette[index]);
+		ts.m_sampler[_stage] = s_renderD3D11->getSamplerState(flags, _controlFlags, _palette[index]);
 	}
 
 	void TextureD3D11::resolve(uint8_t _resolve, uint32_t _layer, uint32_t _numLayers, uint32_t _mip) const
@@ -5823,7 +5842,7 @@ namespace bgfx { namespace d3d11
 									else
 									{
 										m_textureStage.m_srv[stage]     = s_renderD3D11->getCachedSrv(texture.getHandle(), bind.m_mip, true);
-										m_textureStage.m_sampler[stage] = s_renderD3D11->getSamplerState(uint32_t(texture.m_flags), NULL);
+										m_textureStage.m_sampler[stage] = s_renderD3D11->getSamplerState(uint32_t(texture.m_flags), bind.m_samplerControlFlags, NULL);
 									}
 								}
 								break;
@@ -5831,7 +5850,7 @@ namespace bgfx { namespace d3d11
 							case Binding::Texture:
 								{
 									TextureD3D11& texture = m_textures[bind.m_idx];
-									texture.commit(stage, bind.m_samplerFlags, _render->m_colorPalette);
+									texture.commit(stage, bind.m_samplerFlags, bind.m_samplerControlFlags, _render->m_colorPalette);
 								}
 								break;
 
@@ -6132,9 +6151,10 @@ namespace bgfx { namespace d3d11
 					{
 						const Binding& bind = renderBind.m_bind[stage];
 						Binding& current = currentBind.m_bind[stage];
-						if (current.m_idx          != bind.m_idx
-						||  current.m_type         != bind.m_type
-						||  current.m_samplerFlags != bind.m_samplerFlags
+						if (current.m_idx                 != bind.m_idx
+						||  current.m_type                != bind.m_type
+						||  current.m_samplerFlags        != bind.m_samplerFlags
+						||  current.m_samplerControlFlags != bind.m_samplerControlFlags
 						||  programChanged)
 						{
 							if (kInvalidHandle != bind.m_idx)
@@ -6154,7 +6174,7 @@ namespace bgfx { namespace d3d11
 										else
 										{
 											m_textureStage.m_srv[stage]     = s_renderD3D11->getCachedSrv(texture.getHandle(), bind.m_mip, true);
-											m_textureStage.m_sampler[stage] = s_renderD3D11->getSamplerState(uint32_t(texture.m_flags), NULL);
+											m_textureStage.m_sampler[stage] = s_renderD3D11->getSamplerState(uint32_t(texture.m_flags), bind.m_samplerControlFlags, NULL);
 										}
 									}
 									break;
@@ -6162,7 +6182,7 @@ namespace bgfx { namespace d3d11
 								case Binding::Texture:
 									{
 										TextureD3D11& texture = m_textures[bind.m_idx];
-										texture.commit(stage, bind.m_samplerFlags, _render->m_colorPalette);
+										texture.commit(stage, bind.m_samplerFlags, bind.m_samplerControlFlags, _render->m_colorPalette);
 									}
 									break;
 

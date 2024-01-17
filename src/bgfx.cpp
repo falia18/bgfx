@@ -3850,7 +3850,7 @@ namespace bgfx
 		BGFX_ENCODER(setInstanceCount(_numInstances) );
 	}
 
-	void Encoder::setTexture(uint8_t _stage, UniformHandle _sampler, TextureHandle _handle, uint32_t _flags)
+	void Encoder::setTexture(uint8_t _stage, UniformHandle _sampler, TextureHandle _handle, uint32_t _flags, uint64_t _controlFlags)
 	{
 		BGFX_CHECK_HANDLE("setTexture/UniformHandle", s_ctx->m_uniformHandle, _sampler);
 		BGFX_CHECK_HANDLE_INVALID_OK("setTexture/TextureHandle", s_ctx->m_textureHandle, _handle);
@@ -3865,7 +3865,7 @@ namespace bgfx
 			BX_UNUSED(ref);
 		}
 
-		BGFX_ENCODER(setTexture(_stage, _sampler, _handle, _flags) );
+		BGFX_ENCODER(setTexture(_stage, _sampler, _handle, _flags, _controlFlags) );
 	}
 
 	void Encoder::touch(ViewId _id)
@@ -5476,10 +5476,10 @@ namespace bgfx
 		s_ctx->m_encoder0->setInstanceCount(_numInstances);
 	}
 
-	void setTexture(uint8_t _stage, UniformHandle _sampler, TextureHandle _handle, uint32_t _flags)
+	void setTexture(uint8_t _stage, UniformHandle _sampler, TextureHandle _handle, uint32_t _flags, uint64_t _controlFlags)
 	{
 		BGFX_CHECK_ENCODER0();
-		s_ctx->m_encoder0->setTexture(_stage, _sampler, _handle, _flags);
+		s_ctx->m_encoder0->setTexture(_stage, _sampler, _handle, _flags, _controlFlags);
 	}
 
 	void touch(ViewId _id)

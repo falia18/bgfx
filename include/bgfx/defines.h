@@ -429,6 +429,23 @@
 	| BGFX_SAMPLER_COMPARE_MASK \
 	)
 
+// TODO: respect nomenclature from other flags, only one mask, and no need to shift it
+// TODO: add comments
+#define BGFX_TEXCTRL_MINLOD_CLEARMASK             UINT64_C(0xfffffffffffff000) //!< No reset flags.
+#define BGFX_TEXCTRL_MINLOD_MASK                  UINT32_C(0x00000fff)
+#define BGFX_TEXCTRL_MINLOD_SHIFT                 0
+#define BGFX_TEXCTRL_MAXLOD_CLEARMASK             UINT64_C(0xffffffffff000fff)
+#define BGFX_TEXCTRL_MAXLOD_MASK                  UINT32_C(0x00000fff)
+#define BGFX_TEXCTRL_MAXLOD_SHIFT                 12
+#define BGFX_TEXCTRL_MAXANISO_CLEARMASK           UINT64_C(0xfffffffff0ffffff)
+#define BGFX_TEXCTRL_MAXANISO_MASK                UINT32_C(0x0000000f)
+#define BGFX_TEXCTRL_MAXANISO_SHIFT               24
+#define BGFX_TEXFILTER_MIPBIAS_CLEARMASK          UINT64_C(0xfffffe000fffffff)
+#define BGFX_TEXFILTER_MIPBIAS_MASK               UINT32_C(0x00001fff)
+#define BGFX_TEXFILTER_MIPBIAS_SHIFT              28
+#define BGFX_TEXCTRL_ENABLE_CLEARMASK             UINT64_C(0xfffffdffffffffff)
+#define BGFX_TEXCTRL_ENABLE_MASK                  UINT32_C(0x00000001)
+#define BGFX_TEXCTRL_ENABLE_SHIFT                 41
 
 #define BGFX_RESET_MSAA_X2                        UINT32_C(0x00000010) //!< Enable 2x MSAA.
 #define BGFX_RESET_MSAA_X4                        UINT32_C(0x00000020) //!< Enable 4x MSAA.

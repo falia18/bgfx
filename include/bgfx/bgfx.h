@@ -1442,6 +1442,7 @@ namespace bgfx
 		///     mode.
 		///   - `BGFX_SAMPLER_[MIN/MAG/MIP]_[POINT/ANISOTROPIC]` - Point or anisotropic
 		///     sampling.
+		/// @param[in] _controlFlags Texture sampler control options.
 		///
 		/// @attention C99's equivalent binding is `bgfx_encoder_set_texture`.
 		///
@@ -1450,6 +1451,7 @@ namespace bgfx
 			, UniformHandle _sampler
 			, TextureHandle _handle
 			, uint32_t _flags = UINT32_MAX
+			, uint64_t _controlFlags = 0
 			);
 
 		/// Submit an empty primitive for rendering. Uniforms and draw state
@@ -3921,6 +3923,7 @@ namespace bgfx
 	///     mode.
 	///   - `BGFX_SAMPLER_[MIN/MAG/MIP]_[POINT/ANISOTROPIC]` - Point or anisotropic
 	///     sampling.
+	/// @param[in] _controlFlags Texture sampler control options.
 	///
 	/// @attention C99's equivalent binding is `bgfx_set_texture`.
 	///
@@ -3929,6 +3932,7 @@ namespace bgfx
 		, UniformHandle _sampler
 		, TextureHandle _handle
 		, uint32_t _flags = UINT32_MAX
+		, uint64_t _controlFlags = 0
 		);
 
 	/// Submit an empty primitive for rendering. Uniforms and draw state

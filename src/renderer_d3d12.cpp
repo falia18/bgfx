@@ -2231,8 +2231,9 @@ namespace bgfx { namespace d3d12
 
 			TextureD3D12& texture = m_textures[_blitter.m_texture.idx];
 			uint32_t samplerFlags[] = { uint32_t(texture.m_flags & BGFX_SAMPLER_BITS_MASK) };
-			uint16_t samplerStateIdx = getSamplerState(samplerFlags, BX_COUNTOF(samplerFlags), NULL);
-			m_commandList->SetGraphicsRootDescriptorTable(Rdt::Sampler, m_samplerAllocator.get(samplerStateIdx) );
+			uint64_t samplerControlFlags[] = { 0 };
+			uint16_t samplerStateIdx = getSamplerState(samplerFlags, samplerControlFlags, BX_COUNTOF(samplerFlags), NULL);
+			m_commandList->SetGraphicsRootDescriptorTable(Rdt::Sampler, m_samplerAllocator.get(samplerStateIdx));
 			D3D12_GPU_DESCRIPTOR_HANDLE srvHandle;
 			scratchBuffer.allocSrv(srvHandle, texture);
 			m_commandList->SetGraphicsRootDescriptorTable(Rdt::SRV, srvHandle);
@@ -3349,17 +3350,18 @@ namespace bgfx { namespace d3d12
 			return pso;
 		}
 
-		uint16_t getSamplerState(const uint32_t* _flags, uint32_t _num, const float _palette[][4])
+		uint16_t getSamplerState(const uint32_t* _flags, const uint64_t* _controlFlags, uint32_t _num, const float _palette[][4])
 		{
 			bx::HashMurmur2A murmur;
 			murmur.begin();
-			murmur.add(_flags, _num * sizeof(uint32_t) );
+			murmur.add(_flags, _num * sizeof(uint32_t));
+			murmur.add(_controlFlags, _num * sizeof(uint64_t));
 			uint32_t hash = murmur.end();
 
 			uint16_t sampler = m_samplerStateCache.find(hash);
 			if (UINT16_MAX == sampler)
 			{
-				sampler = m_samplerAllocator.alloc(_flags, _num, _palette);
+				sampler = m_samplerAllocator.alloc(_flags, _controlFlags, _num, _palette);
 				m_samplerStateCache.add(hash, sampler);
 			}
 
@@ -3900,7 +3902,7 @@ namespace bgfx { namespace d3d12
 		return idx;
 	}
 
-	uint16_t DescriptorAllocatorD3D12::alloc(const uint32_t* _flags, uint32_t _num, const float _palette[][4])
+	uint16_t DescriptorAllocatorD3D12::alloc(const uint32_t* _flags, const uint64_t* _controlFlags, uint32_t _num, const float _palette[][4])
 	{
 		uint16_t idx = m_handleAlloc->alloc();
 		BX_ASSERT(bx::kInvalidHandle != idx, "DescriptorAllocatorD3D12 is out of memory.");
@@ -3911,6 +3913,8 @@ namespace bgfx { namespace d3d12
 		for (uint32_t ii = 0; ii < _num; ++ii)
 		{
 			uint32_t flags = _flags[ii];
+			uint64_t controlFlags = _controlFlags[ii];
+			const bool enableCtrl = (((controlFlags >> BGFX_TEXCTRL_ENABLE_SHIFT) & BGFX_TEXCTRL_ENABLE_MASK) > 0);
 
 			const uint32_t cmpFunc   = (flags&BGFX_SAMPLER_COMPARE_MASK)>>BGFX_SAMPLER_COMPARE_SHIFT;
 			const uint8_t  minFilter = s_textureFilter[0][(flags&BGFX_SAMPLER_MIN_MASK)>>BGFX_SAMPLER_MIN_SHIFT];
@@ -3923,8 +3927,6 @@ namespace bgfx { namespace d3d12
 			sd.AddressU = s_textureAddress[(flags&BGFX_SAMPLER_U_MASK)>>BGFX_SAMPLER_U_SHIFT];
 			sd.AddressV = s_textureAddress[(flags&BGFX_SAMPLER_V_MASK)>>BGFX_SAMPLER_V_SHIFT];
 			sd.AddressW = s_textureAddress[(flags&BGFX_SAMPLER_W_MASK)>>BGFX_SAMPLER_W_SHIFT];
-			sd.MipLODBias     = float(BGFX_CONFIG_MIP_LOD_BIAS);
-			sd.MaxAnisotropy  = maxAnisotropy;
 			sd.ComparisonFunc = 0 == cmpFunc ? D3D12_COMPARISON_FUNC_NEVER : s_cmpFunc[cmpFunc];
 
 			uint32_t index = (flags & BGFX_SAMPLER_BORDER_COLOR_MASK) >> BGFX_SAMPLER_BORDER_COLOR_SHIFT;
@@ -3945,8 +3947,24 @@ namespace bgfx { namespace d3d12
 				sd.BorderColor[2] = 0.0f;
 				sd.BorderColor[3] = 0.0f;
 			}
-			sd.MinLOD   = 0;
-			sd.MaxLOD   = D3D12_FLOAT32_MAX;
+
+			int bias = ((controlFlags >> BGFX_TEXFILTER_MIPBIAS_SHIFT) & BGFX_TEXFILTER_MIPBIAS_MASK);
+			sd.MipLODBias = (bias & 0x0fff) / 256.0f - (bias & 0x1000 ? 16.f : 0.f);
+			//sd.MipLODBias    = float(BGFX_CONFIG_MIP_LOD_BIAS);
+			if (enableCtrl)
+			{
+				int maxAniso = ((controlFlags >> BGFX_TEXCTRL_MAXANISO_SHIFT) & BGFX_TEXCTRL_MAXANISO_MASK);
+				sd.MaxAnisotropy = maxAniso == 0 ? 1 : maxAniso == 1 ? 2 : maxAniso == 2 ? 4 : maxAniso == 3 ? 6 :
+					maxAniso == 4 ? 8 : maxAniso == 5 ? 10 : maxAniso == 6 ? 12 : maxAniso == 7 ? 16 : 0;
+				sd.MinLOD = ((controlFlags >> BGFX_TEXCTRL_MINLOD_SHIFT) & BGFX_TEXCTRL_MINLOD_MASK) / 256.0f;
+				sd.MaxLOD = ((controlFlags >> BGFX_TEXCTRL_MAXLOD_SHIFT) & BGFX_TEXCTRL_MAXLOD_MASK) / 256.0f;
+			}
+			else
+			{
+				sd.MaxAnisotropy = maxAnisotropy;
+				sd.MinLOD = 0;
+				sd.MaxLOD = D3D12_FLOAT32_MAX;
+			}
 
 			D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
 			{
@@ -6620,6 +6638,7 @@ namespace bgfx { namespace d3d12
 							uint32_t numSet = 0;
 							D3D12_GPU_DESCRIPTOR_HANDLE srvHandle[BGFX_MAX_COMPUTE_BINDINGS] = {};
 							uint32_t samplerFlags[BGFX_MAX_COMPUTE_BINDINGS] = {};
+							uint64_t samplerControlFlags[BGFX_MAX_COMPUTE_BINDINGS] = {};
 							{
 								for (uint8_t stage = 0; stage < maxComputeBindings; ++stage)
 								{
@@ -6641,6 +6660,7 @@ namespace bgfx { namespace d3d12
 												{
 													texture.setState(m_commandList, D3D12_RESOURCE_STATE_GENERIC_READ);
 													scratchBuffer.allocSrv(srvHandle[stage], texture, bind.m_mip);
+													samplerControlFlags[stage] = bind.m_samplerControlFlags;
 													samplerFlags[stage] = uint32_t(texture.m_flags);
 												}
 
@@ -6680,6 +6700,7 @@ namespace bgfx { namespace d3d12
 												{
 													buffer.setState(m_commandList, D3D12_RESOURCE_STATE_GENERIC_READ);
 													scratchBuffer.allocSrv(srvHandle[stage], buffer);
+													samplerControlFlags[stage] = bind.m_samplerControlFlags;
 												}
 
 												++numSet;
@@ -6690,6 +6711,7 @@ namespace bgfx { namespace d3d12
 									else
 									{
 										samplerFlags[stage] = 0;
+										samplerControlFlags[stage] = 0;
 										scratchBuffer.allocEmpty(srvHandle[stage]);
 									}
 								}
@@ -6698,7 +6720,7 @@ namespace bgfx { namespace d3d12
 								{
 									Bind bind;
 									bind.m_srvHandle = srvHandle[0];
-									bind.m_samplerStateIdx = getSamplerState(samplerFlags, maxComputeBindings, _render->m_colorPalette);
+									bind.m_samplerStateIdx = getSamplerState(samplerFlags, samplerControlFlags, maxComputeBindings, _render->m_colorPalette);
 									bindCached = bindLru.add(bindHash, bind, 0);
 								}
 							}
@@ -6932,6 +6954,7 @@ namespace bgfx { namespace d3d12
 							uint32_t numSet = 0;
 							D3D12_GPU_DESCRIPTOR_HANDLE srvHandle[BGFX_CONFIG_MAX_TEXTURE_SAMPLERS] = {};
 							uint32_t samplerFlags[BGFX_CONFIG_MAX_TEXTURE_SAMPLERS] = {};
+							uint64_t samplerControlFlags[BGFX_CONFIG_MAX_TEXTURE_SAMPLERS] = {};
 							{
 								for (uint32_t stage = 0; stage < BGFX_CONFIG_MAX_TEXTURE_SAMPLERS; ++stage)
 								{
@@ -6954,6 +6977,7 @@ namespace bgfx { namespace d3d12
 													texture.setState(m_commandList, D3D12_RESOURCE_STATE_GENERIC_READ);
 													scratchBuffer.allocSrv(srvHandle[stage], texture, bind.m_mip);
 													samplerFlags[stage] = uint32_t(texture.m_flags);
+													samplerControlFlags[stage] = bind.m_samplerControlFlags;
 												}
 
 												++numSet;
@@ -6970,7 +6994,7 @@ namespace bgfx { namespace d3d12
 													: texture.m_flags
 													) & (BGFX_SAMPLER_BITS_MASK | BGFX_SAMPLER_BORDER_COLOR_MASK | BGFX_SAMPLER_COMPARE_MASK)
 													;
-
+												samplerControlFlags[stage] = bind.m_samplerControlFlags;
 												++numSet;
 											}
 											break;
@@ -6979,6 +7003,7 @@ namespace bgfx { namespace d3d12
 										case Binding::VertexBuffer:
 											{
 												samplerFlags[stage] = 0;
+												samplerControlFlags[stage] = 0;
 
 												BufferD3D12& buffer = Binding::IndexBuffer == bind.m_type
 													? m_indexBuffers[bind.m_idx]
@@ -7005,6 +7030,7 @@ namespace bgfx { namespace d3d12
 									{
 										scratchBuffer.allocEmpty(srvHandle[stage]);
 										samplerFlags[stage] = 0;
+										samplerControlFlags[stage] = 0;
 									}
 								}
 							}
@@ -7013,7 +7039,7 @@ namespace bgfx { namespace d3d12
 							{
 								Bind bind;
 								bind.m_srvHandle       = srvHandle[0];
-								bind.m_samplerStateIdx = getSamplerState(samplerFlags, BGFX_CONFIG_MAX_TEXTURE_SAMPLERS, _render->m_colorPalette);
+								bind.m_samplerStateIdx = getSamplerState(samplerFlags, samplerControlFlags, BGFX_CONFIG_MAX_TEXTURE_SAMPLERS, _render->m_colorPalette);
 								bindCached = bindLru.add(bindHash, bind, 0);
 							}
 						}

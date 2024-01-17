@@ -1666,6 +1666,7 @@ namespace bgfx
 		};
 
 		uint32_t m_samplerFlags;
+		uint64_t m_samplerControlFlags;
 		uint16_t m_idx;
 		uint8_t  m_type;
 		uint8_t  m_format;
@@ -1699,6 +1700,7 @@ namespace bgfx
 					bind.m_idx = kInvalidHandle;
 					bind.m_type = 0;
 					bind.m_samplerFlags = 0;
+					bind.m_samplerControlFlags = 0;
 				}
 			}
 		};
@@ -2715,7 +2717,7 @@ namespace bgfx
 			m_draw.m_numInstances = _numInstances;
 		}
 
-		void setTexture(uint8_t _stage, UniformHandle _sampler, TextureHandle _handle, uint32_t _flags)
+		void setTexture(uint8_t _stage, UniformHandle _sampler, TextureHandle _handle, uint32_t _flags, uint64_t _controlFlags)
 		{
 			Binding& bind = m_bind.m_bind[_stage];
 			bind.m_idx    = _handle.idx;
@@ -2724,6 +2726,7 @@ namespace bgfx
 				? BGFX_SAMPLER_INTERNAL_DEFAULT
 				: _flags
 				;
+			bind.m_samplerControlFlags = _controlFlags;
 
 			if (isValid(_sampler) )
 			{
