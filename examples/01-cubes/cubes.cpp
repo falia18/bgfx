@@ -19,6 +19,11 @@ struct PosColorVertex
 
 	static void init()
 	{
+		dummy_layout
+			.begin()
+			.add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+			.end();
+
 		ms_layout
 			.begin()
 			.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
@@ -26,9 +31,11 @@ struct PosColorVertex
 			.end();
 	};
 
+	static bgfx::VertexLayout dummy_layout;
 	static bgfx::VertexLayout ms_layout;
 };
 
+bgfx::VertexLayout PosColorVertex::dummy_layout;
 bgfx::VertexLayout PosColorVertex::ms_layout;
 
 static PosColorVertex s_cubeVertices[] =
@@ -173,7 +180,7 @@ public:
 		m_vbh = bgfx::createVertexBuffer(
 			// Static data can be passed with bgfx::makeRef
 			  bgfx::makeRef(s_cubeVertices, sizeof(s_cubeVertices) )
-			, PosColorVertex::ms_layout
+			, PosColorVertex::dummy_layout // REVIEW: Create the vb using a layout that has a different stride that the one used to draw
 			);
 
 		// Create static index buffer for triangle list rendering.
@@ -324,7 +331,8 @@ public:
 					bgfx::setTransform(mtx);
 
 					// Set vertex and index buffer.
-					bgfx::setVertexBuffer(0, m_vbh);
+					static bgfx::VertexLayoutHandle vlh = bgfx::createVertexLayout(PosColorVertex::ms_layout);
+					bgfx::setVertexBuffer(0, m_vbh, 0, UINT32_MAX, vlh); // REVIEW: Use actual layout to draw
 					bgfx::setIndexBuffer(ibh);
 
 					// Set render states.
