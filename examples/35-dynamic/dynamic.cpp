@@ -9,6 +9,14 @@
 
 #include <bx/rng.h>
 
+ // BUG SHOWCASE:
+// Use case: At the time of allocation, the layouts of the dynamic vertex buffers are not known, I need to:
+// - Allocate dynamic buffers with a fake layout (or even just a size in byte)
+// - Issue draw calls by passing the real layout at runtime
+// ISSUE: This only works for the first allocated dynamic buffer, all other draw calls point to wrong data (offset is invalid)
+//
+// Change dummy layout to layout with the same stride, or checkout pr/vb-set-with-offset to fix
+
 namespace
 {
 
@@ -29,12 +37,28 @@ struct PosColorVertex
 			.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
 			.add(bgfx::Attrib::Color0,   4, bgfx::AttribType::Uint8, true)
 			.end();
+
+		// BUG SHOWCASE: This doesn't work because the stride is different from the stride used at draw time
+		ms_dummyLayout
+			.begin()
+			.add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+			.end();
+
+		// BUG SHOWCASE: This works because stride is the same
+		//ms_dummyLayout
+		//	.begin()
+		//	.add(bgfx::Attrib::Color0, 20, bgfx::AttribType::Uint8, true)
+		//	.end();
 	};
 
 	static bgfx::VertexLayout ms_layout;
+	static bgfx::VertexLayout ms_dummyLayout;
+	static bgfx::VertexLayoutHandle ms_layoutHandle;
 };
 
 bgfx::VertexLayout PosColorVertex::ms_layout;
+bgfx::VertexLayout PosColorVertex::ms_dummyLayout;
+bgfx::VertexLayoutHandle PosColorVertex::ms_layoutHandle;
 
 static PosColorVertex s_cubeVertices[] =
 {
@@ -124,6 +148,7 @@ public:
 		// Create vertex stream declaration.
 		PosColorVertex::init();
 
+		// BUG SHOWCASE: Allocate dynamic vertex buffer with a dummy layout. Real layout is not known at this point
 		// Create static vertex buffer.
 		for (uint32_t yy = 0; yy < kDimHeight; ++yy)
 		{
@@ -132,7 +157,7 @@ public:
 				m_vbh[yy*kDimWidth+xx] = bgfx::createDynamicVertexBuffer(
 					// Static data can be passed with bgfx::makeRef
 					  bgfx::makeRef(s_cubeVertices, sizeof(s_cubeVertices) )
-					, PosColorVertex::ms_layout
+					, PosColorVertex::ms_dummyLayout
 					);
 			}
 		}
@@ -175,6 +200,12 @@ public:
 
 	bool update() override
 	{
+		// BUG SHOWCASE: Now we know the layout, allocate it. (Depending on use case, this can change from frame to frame)
+		if (bgfx::isValid(PosColorVertex::ms_layoutHandle))
+		{
+			PosColorVertex::ms_layoutHandle = bgfx::createVertexLayout(PosColorVertex::ms_layout);
+		}
+
 		if (!entry::processEvents(m_width, m_height, m_debug, m_reset, &m_mouseState) )
 		{
 			imguiBeginFrame(m_mouseState.m_mx
@@ -214,6 +245,8 @@ public:
 			bgfx::touch(0);
 
 			{
+				uint32_t idx = m_mwc.gen() % (kDimWidth * kDimHeight);
+
 				float angle = bx::frnd(&m_mwc);
 				float mtx[16];
 				bx::mtxRotateZ(mtx, angle);
@@ -223,11 +256,13 @@ public:
 				const uint32_t abgr = m_mwc.gen();
 				for (uint32_t ii = 0; ii < BX_COUNTOF(s_cubeVertices); ++ii)
 				{
-					bx::store(&vertex[ii].m_x, bx::mul(bx::load<bx::Vec3>(&s_cubeVertices[ii].m_x), mtx) );
-					vertex[ii].m_abgr = abgr;
+					// BUG SHOWCASE: Color to better show invalid buffers (gradient from black to yellow)
+					// With working buffers, shows black to green for lines and black to red for columns
+					uint8_t columnColor = (uint8_t)((idx / kDimWidth) * 255 / kDimWidth);
+					uint8_t lineColor = (uint8_t)(idx % kDimHeight / (float)kDimHeight * 255);
+					vertex[ii].m_abgr = 0xff000000 | (columnColor << 8u)| lineColor;
 				}
 
-				uint32_t idx = m_mwc.gen() % (kDimWidth*kDimHeight);
 				bgfx::update(m_vbh[idx], 0, mem);
 			}
 
@@ -246,7 +281,8 @@ public:
 					bgfx::setTransform(mtx);
 
 					// Set vertex and index buffer.
-					bgfx::setVertexBuffer(0, m_vbh[yy*kDimWidth+xx]);
+					// BUG SHOWCASE: Set vertex buffer with real layout for draw
+					bgfx::setVertexBuffer(0, m_vbh[yy*kDimWidth+xx], 0, UINT32_MAX, PosColorVertex::ms_layoutHandle);
 					bgfx::setIndexBuffer(m_ibh);
 
 					// Set render states.
