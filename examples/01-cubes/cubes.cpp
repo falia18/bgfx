@@ -7,6 +7,12 @@
 #include "bgfx_utils.h"
 #include "imgui/imgui.h"
 
+// ISSUE SHOWCASE:
+// Two cases where startVertex isn't enough to bind a vertex buffer (more explanation in init() and update() functions).
+// These cases are usually found in old games and/or games using OpenGL
+// Uncomment the define below and checkout https://github.com/falia18/bgfx/tree/pr/vb-set-with-offset for the solution I used (also works with non-static buffers)
+//#define BIND_WITH_OFFSET
+
 namespace
 {
 
@@ -31,6 +37,90 @@ struct PosColorVertex
 
 bgfx::VertexLayout PosColorVertex::ms_layout;
 
+struct PosUvColorVertex
+{
+	float m_x;
+	float m_y;
+	float m_z;
+	float m_u;
+	float m_v;
+	uint32_t m_abgr;
+
+	static void init()
+	{
+		ms_layout
+			.begin()
+			.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+			// Skipped because the shader doesn't use it but actual use case would be a different shader
+			.skip(sizeof(float[2])) // bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float
+			.add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+			.end();
+	};
+
+	static bgfx::VertexLayout ms_layout;
+};
+bgfx::VertexLayout PosUvColorVertex::ms_layout;
+
+
+
+struct CubeNonInterleaved
+{
+	// Colors
+	// offset = 0
+	// size = 4
+	// start vertex = 0 / 4 = 0
+	uint32_t colors[8] =
+	{
+		0xff000000,
+		0xff0000ff,
+		0xff00ff00,
+		0xff00ffff,
+		0xffff0000,
+		0xffff00ff,
+		0xffffff00,
+		0xffffffff
+	};
+
+	// Positions
+	// offset = 32
+	// size = 12
+	// start vertex = 32 / 12 = 2.66667
+	float positions[8][3] =
+	{
+		{ -1.0f, 1.0f, 1.0f },
+		{ 1.0f, 1.0f, 1.0f },
+		{ -1.0f, -1.0f, 1.0f },
+		{ 1.0f, -1.0f, 1.0f },
+		{ -1.0f, 1.0f, -1.0f },
+		{ 1.0f, 1.0f, -1.0f },
+		{ -1.0f, -1.0f, -1.0f },
+		{ 1.0f, -1.0f, -1.0f }
+	};
+
+	static void init()
+	{
+		ms_layoutColor
+			.begin()
+			.add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+			.end();
+		ms_layoutPos
+			.begin()
+			.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+			.end();
+	};
+
+	static bgfx::VertexLayout ms_layoutPos;
+	static bgfx::VertexLayout ms_layoutColor;
+};
+
+bgfx::VertexLayout CubeNonInterleaved::ms_layoutPos;
+bgfx::VertexLayout CubeNonInterleaved::ms_layoutColor;
+
+
+static CubeNonInterleaved s_cubeNonInterleaved;
+
+
+
 static PosColorVertex s_cubeVertices[] =
 {
 	{-1.0f,  1.0f,  1.0f, 0xff000000 },
@@ -41,6 +131,18 @@ static PosColorVertex s_cubeVertices[] =
 	{ 1.0f,  1.0f, -1.0f, 0xffff00ff },
 	{-1.0f, -1.0f, -1.0f, 0xffffff00 },
 	{ 1.0f, -1.0f, -1.0f, 0xffffffff },
+};
+
+static PosUvColorVertex s_cubeUVVertices[] =
+{
+	{-1.0f,  1.0f,  1.0f, 0.0f, 0.0f, 0xff000000 },
+	{ 1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 0xff0000ff },
+	{-1.0f, -1.0f,  1.0f, 0.0f, 1.0f, 0xff00ff00 },
+	{ 1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 0xff00ffff },
+	{-1.0f,  1.0f, -1.0f, 0.0f, 0.0f, 0xffff0000 },
+	{ 1.0f,  1.0f, -1.0f, 1.0f, 0.0f, 0xffff00ff },
+	{-1.0f, -1.0f, -1.0f, 0.0f, 1.0f, 0xffffff00 },
+	{ 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 0xffffffff },
 };
 
 static const uint16_t s_cubeTriList[] =
@@ -168,6 +270,47 @@ public:
 
 		// Create vertex stream declaration.
 		PosColorVertex::init();
+		PosUvColorVertex::init();
+		CubeNonInterleaved::init();
+
+		// ISSUE SHOWCASE:
+		// First case: The buffer contains several meshes.
+		// Consider the buffer loaded directly from file:
+		// dataMeshes = dataMesh1 .. dataMesh2
+		dataMeshes = malloc(sizeof(s_cubeUVVertices) + sizeof(s_cubeVertices));
+		if (dataMeshes)
+		{
+			memcpy(dataMeshes, s_cubeVertices, sizeof(s_cubeVertices));
+			memcpy(((uint8_t*)dataMeshes) + sizeof(s_cubeVertices), s_cubeUVVertices, sizeof(s_cubeUVVertices));
+		}
+
+
+		// Second case: The buffer is not interleaved
+		// Consider the buffer is loaded directly from file:
+		// dataMeshNonInterleaved = positionsMesh .. UVMesh
+		dataMeshNonInterleaved = &s_cubeNonInterleaved;
+
+
+		// I know the easiest way to fix this normally is to split the buffers and upload them separately
+		// But in the case of a remaster this is not usually possible without rewriting a lot of the codebase
+
+		m_vbhMeshes = bgfx::createVertexBuffer(
+			bgfx::makeRef(dataMeshes, sizeof(s_cubeUVVertices) + sizeof(s_cubeVertices))
+			, PosColorVertex::ms_layout // Layout doesn't matter it will be set at bind time
+		);
+
+		m_vbhMeshNonInterleaved = bgfx::createVertexBuffer(
+			bgfx::makeRef(dataMeshNonInterleaved, sizeof(s_cubeNonInterleaved))
+			, CubeNonInterleaved::ms_layoutColor // Layout doesn't matter it will be set at bind time
+		);
+
+		// Layouts that will be set when binding
+		m_LayoutPosColor = createVertexLayout(PosColorVertex::ms_layout);
+		m_LayoutPosSkipUvColor = createVertexLayout(PosUvColorVertex::ms_layout);
+		m_LayoutPosOnly = createVertexLayout(CubeNonInterleaved::ms_layoutPos);
+		m_LayoutColorOnly = createVertexLayout(CubeNonInterleaved::ms_layoutColor);
+
+		// END ISSUE SHOWCASE
 
 		// Create static vertex buffer.
 		m_vbh = bgfx::createVertexBuffer(
@@ -226,6 +369,15 @@ public:
 
 		bgfx::destroy(m_vbh);
 		bgfx::destroy(m_program);
+
+		free(dataMeshes);
+
+		bgfx::destroy(m_vbhMeshes);
+		bgfx::destroy(m_vbhMeshNonInterleaved);
+		bgfx::destroy(m_LayoutPosColor);
+		bgfx::destroy(m_LayoutPosSkipUvColor);
+		bgfx::destroy(m_LayoutPosOnly);
+		bgfx::destroy(m_LayoutColorOnly);
 
 		// Shutdown bgfx.
 		bgfx::shutdown();
@@ -309,31 +461,99 @@ public:
 				| s_ptState[m_pt]
 				;
 
-			// Submit 11x11 cubes.
-			for (uint32_t yy = 0; yy < 11; ++yy)
-			{
-				for (uint32_t xx = 0; xx < 11; ++xx)
-				{
-					float mtx[16];
-					bx::mtxRotateXY(mtx, time + xx*0.21f, time + yy*0.37f);
-					mtx[12] = -15.0f + float(xx)*3.0f;
-					mtx[13] = -15.0f + float(yy)*3.0f;
-					mtx[14] = 0.0f;
+			//// Submit 11x11 cubes.
+			//for (uint32_t yy = 0; yy < 11; ++yy)
+			//{
+			//	for (uint32_t xx = 0; xx < 11; ++xx)
+			//	{
+			//		float mtx[16];
+			//		bx::mtxRotateXY(mtx, time + xx*0.21f, time + yy*0.37f);
+			//		mtx[12] = -15.0f + float(xx)*3.0f;
+			//		mtx[13] = -15.0f + float(yy)*3.0f;
+			//		mtx[14] = 0.0f;
 
-					// Set model matrix for rendering.
-					bgfx::setTransform(mtx);
+			//		// Set model matrix for rendering.
+			//		bgfx::setTransform(mtx);
 
-					// Set vertex and index buffer.
-					bgfx::setVertexBuffer(0, m_vbh);
-					bgfx::setIndexBuffer(ibh);
+			//		// Set vertex and index buffer.
+			//		bgfx::setVertexBuffer(0, m_vbh);
+			//		bgfx::setIndexBuffer(ibh);
 
-					// Set render states.
-					bgfx::setState(state);
+			//		// Set render states.
+			//		bgfx::setState(state);
 
-					// Submit primitive for rendering to view 0.
-					bgfx::submit(0, m_program);
-				}
-			}
+			//		// Submit primitive for rendering to view 0.
+			//		bgfx::submit(0, m_program);
+			//	}
+			//}
+
+		// ISSUE SHOWCASE:
+
+			// Submit cube 1
+
+			float mtx[16];
+			bx::mtxRotateXY(mtx, time + 0.21f, time + 0.37f);
+			mtx[12] = -15.0f;
+			mtx[13] = 0.0f;
+			mtx[14] = 0.0f;
+
+			bgfx::setTransform(mtx);
+
+			// Cube 1 is at offset 0 so no issues there
+			bgfx::setVertexBuffer(0, m_vbhMeshes, 0, 8, m_LayoutPosColor);
+
+			bgfx::setIndexBuffer(ibh);
+			bgfx::setState(state);
+			bgfx::submit(0, m_program);
+
+
+			// Submit cube 2
+
+			bx::mtxRotateXY(mtx, time + 0.21f, time + 0.37f);
+			mtx[12] = 0.0f;
+			mtx[13] = 0.0f;
+			mtx[14] = 0.0f;
+			bgfx::setTransform(mtx);
+
+			// Cube 2 is at offset 128, m_LayoutPosSkipUvColor stride is 18, so start vertex would be 128 / 18 = 5.3333
+#ifdef BIND_WITH_OFFSET
+			// Needed
+			bgfx::setVertexBufferWithOffset(0, m_vbhMeshes, 128, 8, m_LayoutPosSkipUvColor);
+#else
+			// Won't work because start vertex is not an integer
+			bgfx::setVertexBuffer(0, m_vbhMeshes, 128 / PosUvColorVertex::ms_layout.m_stride, 8, m_LayoutPosSkipUvColor);
+#endif
+
+			bgfx::setIndexBuffer(ibh);
+			bgfx::setState(state);
+			bgfx::submit(0, m_program);
+
+
+
+			// Submit cube non interleaved
+			bx::mtxRotateXY(mtx, time + 0.21f, time + 0.37f);
+			mtx[12] = 15.0f;
+			mtx[13] = 0.0f;
+			mtx[14] = 0.0f;
+			bgfx::setTransform(mtx);
+
+#ifdef BIND_WITH_OFFSET
+			// Binding with offset solves the restriction
+			bgfx::setVertexBuffer(0, m_vbhMeshNonInterleaved, 0, 8, m_LayoutColorOnly);
+			bgfx::setVertexBufferWithOffset(1, m_vbhMeshNonInterleaved, 32 , 8, m_LayoutPosOnly);
+#else
+			// Positions are at offset 32 and m_LayoutPosOnly stride is 12, meaning start vertex for positions would be 32 / 12 = 2.66667
+			// Won't work because start vertex is not an integer
+			bgfx::setVertexBuffer(0, m_vbhMeshNonInterleaved, 0, 8, m_LayoutColorOnly);
+			bgfx::setVertexBuffer(1, m_vbhMeshNonInterleaved, 32 / 12, 8, m_LayoutPosOnly);
+#endif
+
+			bgfx::setIndexBuffer(ibh);
+			bgfx::setState(state);
+			bgfx::submit(0, m_program);
+
+			// END ISSUE SHOWCASE
+
 
 			// Advance to next frame. Rendering thread will be kicked to
 			// process submitted rendering primitives.
@@ -361,6 +581,20 @@ public:
 	bool m_g;
 	bool m_b;
 	bool m_a;
+
+
+	void* dataMeshes;
+	void* dataMeshNonInterleaved;
+
+	bgfx::VertexBufferHandle m_vbhMeshes;
+	bgfx::VertexBufferHandle m_vbhMeshNonInterleaved;
+
+	bgfx::VertexLayoutHandle m_LayoutPosColor;
+	bgfx::VertexLayoutHandle m_LayoutPosSkipUvColor;
+
+	bgfx::VertexLayoutHandle m_LayoutPosOnly;
+	bgfx::VertexLayoutHandle m_LayoutColorOnly;
+
 };
 
 } // namespace
